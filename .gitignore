@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+.DS_Store
+.idea/
+.vscode/
+*.h5
+# Outputs from example scripts
+*.npz
+*.png

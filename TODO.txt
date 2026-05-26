@@ -1,0 +1,1 @@
+It is useful to average diffuse scattering with the known space group, can we expand it? This would require getting all symmetry elements, carefully expanding diffuse scattering/total scattering to the border (last pixel) applying the rotational part of the symmetry and then cutting the border back.

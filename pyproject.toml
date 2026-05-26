@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gemmi-disorder"
+version = "0.1.0"
+description = "Diffuse scattering from disordered atomic configurations, on top of gemmi."
+authors = [{ name = "Arkadiy Simonov", email = "aglietto@gmail.com" }]
+requires-python = ">=3.9"
+dependencies = [
+    "gemmi>=0.6",
+    "numpy>=1.24",
+    "h5py>=3.0",
+]
+
+[project.optional-dependencies]
+ase = ["ase>=3.22"]
+dev = ["pytest>=7", "pytest-cov"]
+
+[tool.setuptools.packages.find]
+include = ["gemmi_disorder*"]
