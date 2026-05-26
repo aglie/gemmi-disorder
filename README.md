@@ -88,6 +88,10 @@ grid = Grid.from_supercell(supercell=(20, 20, 20), hkl_max=2)
 result = average_diffuse(structures, grid, blur=0.01)
 ```
 
+## Visualization
+
+The resulting diffuse scattering dataset can be viewed using [PDFViewer](https://github.com/aglie/DensityViewer) from the Yell package.
+
 ## Limitations (v1)
 
 - **Anisotropic ADPs are supported** via the canonical IUCr U_cif → U_cart
