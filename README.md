@@ -96,16 +96,10 @@ result = average_diffuse(structures, grid, blur=0.01)
   any cell with a 90° angle (hexagonal / trigonal / monoclinic). This
   package goes the other direction (sx → mx) with the correct formula, so
   it is unaffected — but downstream `mx_to_sx_structure` calls on the same
-  cells are. See `docs/gemmi_interop_quirk.md`.
+  cells are.
 - **No symmetry expansion.** Configurations must already be in P1; there
   is no symmetry averaging.
-- **All snapshots in memory.** v1 takes a Python list; streaming and
-  checkpointing can be added later.
 
 ## Acknowledgements
 
-The fast path and Yell HDF5 writer are taken verbatim from the
-`CalculateScattering.py` files used in the Dy467 disorder analysis and the
-Seminar 7 disordered-materials teaching code; see
-`docs/CALCULATE_SCATTERING_COMPARISON.md` in the jax-ftl repo for the
-provenance and decisions behind this consolidation.
+The code is based on work of Valentin Istomin, was tested by Johnathan Bulled and Cristian Ciomaga Hatnean.
