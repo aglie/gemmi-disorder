@@ -24,12 +24,22 @@ pip install -e .[ase]
 
 ### From CIF files
 
-Each input CIF must be one realised disordered configuration in P1, with a
-unit cell that is the `supercell`-times-supercell of the underlying motif.
-That is: if `supercell = (nx, ny, nz)` and the underlying motif has cell
-`(a, b, c, α, β, γ)`, then every CIF should have cell
-`(a·nx, b·ny, c·nz, α, β, γ)` and contain the full supercell's worth of
-atoms. The grid below is built around that supercell.
+**One CIF = one configuration.** `gemmi.read_small_structure` reads a single
+crystal structure; the averaging loop in this package treats every file in
+the list as one realisation of the disorder. Multi-model / multi-block
+files are not supported in v1.
+
+Each CIF must:
+- be in P1 (no symmetry is applied),
+- contain the **full supercell** of atoms (every site explicit, no
+  symmetry mates implied), and
+- have a unit cell that matches the chosen `supercell` and the underlying
+  motif. If the motif is `(a, b, c, α, β, γ)` and `supercell = (nx, ny, nz)`,
+  the CIF cell must be `(a·nx, b·ny, c·nz, α, β, γ)`.
+
+The grid is built around the supercell convention (1 r.l.u. step = 1
+supercell vector), so the chosen `hkl_max` is in units of the underlying
+motif's reciprocal lattice.
 
 ```python
 import gemmi, glob

@@ -1,10 +1,15 @@
 """
 I/O helpers — saving averaged maps in Yell 1.0 HDF5 format.
 
-`save2yellS` is verbatim from the existing CalculateScattering.py used in the
-Dy467 production pipeline. `save_to_yell` is a thin wrapper that, given a
-`DiffuseResult`, writes three .h5 files (diffuse / averaged / total) using
-the supercell convention.
+Yell 1.0 file layout (all entries top-level datasets):
+
+    /data           3D float array of intensity values
+    /format         b'Yell 1.0'
+    /is_direct      False (this package writes reciprocal-space data only)
+    /lower_limits   3-tuple, hkl of voxel data[0,0,0] in r.l.u.
+    /step_sizes     3-tuple, step in r.l.u. per voxel along each axis
+    /unit_cell      6-tuple, (a, b, c, alpha, beta, gamma) of the underlying
+                    motif unit cell (i.e. supercell divided by `supercell`)
 """
 
 from pathlib import Path
@@ -24,6 +29,10 @@ def save2yellS(output_filename: Union[str, Path],
                supercell: Tuple[int, int, int]) -> None:
     """Save a 3D intensity array to a Yell 1.0 HDF5 file.
 
+    The grid is assumed to be centred on h=k=l=0 — `lower_limits` is set to
+    `-(shape / 2) / supercell` so that voxel `data[shape/2]` corresponds to
+    the origin of reciprocal space.
+
     Parameters
     ----------
     output_filename: str | Path
@@ -31,27 +40,24 @@ def save2yellS(output_filename: Union[str, Path],
     intensity: array
         3D real array of intensity values (shape = grid pixels).
     cell: gemmi.UnitCell
-        Underlying unit cell (NOT the supercell — the supercell expansion is
-        applied here from `supercell`).
+        Underlying *motif* unit cell, before supercell expansion. The cell
+        written to file is divided by `supercell`.
     supercell: (nx, ny, nz)
-        Supercell size used when computing `intensity`.
+        Supercell size that was used to compute `intensity`.
     """
-    unit_cell = [cell.a / supercell[0], cell.b / supercell[1], cell.c / supercell[2],
-                 cell.alpha, cell.beta, cell.gamma]
-    supercell = np.array(supercell)
-    # intensity = fftshift(intensity)
-    hklmax = np.array(intensity.shape) / 2
+    nx, ny, nz = supercell
+    motif_cell = [cell.a / nx, cell.b / ny, cell.c / nz,
+                  cell.alpha, cell.beta, cell.gamma]
+    sc = np.asarray(supercell, dtype=float)
+    hkl_half = np.asarray(intensity.shape, dtype=float) / 2.0
 
-    output = h5py.File(output_filename, 'w')
-
-    output['data'] = intensity
-    output['format'] = b'Yell 1.0'  # formatting string
-    output['is_direct'] = False  # whether the data is in real or reciprocal space. Scattering data is in reciprocal space
-    output['lower_limits'] = -hklmax / supercell  # the smallest hkl index for this dataset
-    output['step_sizes'] = 1 / supercell
-    output['unit_cell'] = unit_cell
-
-    output.close()
+    with h5py.File(output_filename, "w") as out:
+        out["data"] = intensity
+        out["format"] = b"Yell 1.0"
+        out["is_direct"] = False
+        out["lower_limits"] = -hkl_half / sc
+        out["step_sizes"] = 1.0 / sc
+        out["unit_cell"] = motif_cell
 
 
 def save_to_yell(result: DiffuseResult,
@@ -70,8 +76,9 @@ def save_to_yell(result: DiffuseResult,
     result: DiffuseResult
         Output of `average_diffuse`.
     cell: gemmi.UnitCell
-        Underlying unit cell. (We don't store this in `DiffuseResult` — passing
-        it explicitly keeps the result object purely numerical.)
+        Underlying motif unit cell (NOT the supercell). The file's `unit_cell`
+        entry will be this cell divided by `supercell` — kept consistent with
+        the Dy467 / Yell convention.
     supercell: (nx, ny, nz)
         Supercell size used for the calculation.
     prefix: str | Path
