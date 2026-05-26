@@ -31,6 +31,7 @@ from gemmi_disorder import (
     DisorderedStructure,
     Grid,
     average_diffuse,
+    save2yellS
 )
 
 
@@ -174,6 +175,8 @@ def main():
         grid_step=grid.step_sizes,
         grid_npix=grid.no_pixels,
     )
+
+    save2yellS("FCC_444.h5", result.diffuse, cell=snapshots[0].to_small_structure().cell, supercell=supercell)
     print(f"\nsaved arrays to {out}")
 
 
