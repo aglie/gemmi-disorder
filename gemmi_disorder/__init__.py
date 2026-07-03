@@ -28,6 +28,7 @@ from .scattering import (
 )
 from .averaging import average_diffuse, DiffuseResult
 from .io import save2yellS, save_to_yell
+from .pdf import tiled_patterson, PattersonWindow, BlockDensityCache
 
 __all__ = [
     "Grid",
@@ -45,4 +46,7 @@ __all__ = [
     "DiffuseResult",
     "save2yellS",
     "save_to_yell",
+    "tiled_patterson",
+    "PattersonWindow",
+    "BlockDensityCache",
 ]

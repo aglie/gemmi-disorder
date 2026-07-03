@@ -88,6 +88,47 @@ grid = Grid.from_supercell(supercell=(20, 20, 20), hkl_max=2)
 result = average_diffuse(structures, grid, blur=0.01)
 ```
 
+## Large objects: the tiled 3D-PDF path
+
+The `sf_gemmi` fast path samples reciprocal space at `1 / supercell` — Nyquist
+for the *whole box*. For a big object (e.g. a 4 M-atom nanoparticle) at
+PDF-grade `Q_max` that is a multi-terabyte FFT, and it massively oversamples:
+a PDF study only needs reciprocal sampling fine enough for the real-space range
+`r_max` you actually trust. The reciprocal bin and `r_max` are a Fourier pair,
+so the calculation should be driven by that pair, not by the box.
+
+`tiled_patterson` computes the 3D-PDF (Patterson) window
+`P(r) = Σ_x ρ(x) ρ(x + r)` directly, for `|r_α| ≤ r_max`, via an overlap-save
+decomposition — never materialising anything bigger than the output window.
+See [`docs/tiled_3dpdf_proposal.md`](docs/tiled_3dpdf_proposal.md) for the
+derivation and cost model.
+
+```python
+import gemmi
+from gemmi_disorder import tiled_patterson
+
+structure = gemmi.read_small_structure("nanoparticle.cif")   # P1, orthogonal
+pw = tiled_patterson(
+    structure,
+    q_max=25.0,          # data resolution (Å⁻¹) -> PDF voxel Δr = π/q_max
+    r_max=50.0,          # PDF range of interest (Å) -> sets the reciprocal bin
+    blur=0.5,            # extra B for FFT stability (left in — see below)
+    disk_budget_bytes=8 * 1024**3,   # cap the on-disk block cache; evicted
+    mem_blocks=4,                    #   blocks are rebuilt from atoms as needed
+)
+# pw.data is the raw (2·M+1)³ Patterson window; pw.r_step, pw.r_max, pw.blur.
+```
+
+**Deferred corrections.** `tiled_patterson` returns the *raw, blurred*
+Patterson: **no deblur and no window taper are applied in 3D**. Both are
+point-wise and are best done at the very end, on the 1D PDF after the
+square→spherical remap. Undo the blur there with `exp(2·blur·s²)` in reciprocal
+space (note the factor **2** relative to the amplitude-space `exp(blur·stol²)`
+in `sf_gemmi` — a Patterson is an intensity).
+
+**Limitations (draft).** Orthogonal cells only; isotropic voxel; `margin_A`
+(the atom guard-band around each block) must exceed the density cutoff radius.
+
 ## Visualization
 
 The resulting diffuse scattering dataset can be viewed using [PDFViewer](https://github.com/aglie/DensityViewer) from the Yell package.
