@@ -1,1 +1,15 @@
 It is useful to average diffuse scattering with the known space group, can we expand it? This would require getting all symmetry elements, carefully expanding diffuse scattering/total scattering to the border (last pixel) applying the rotational part of the symmetry and then cutting the border back.
+
+DiffuseResult and save2yellS are awkward. DiffuseResult doesn't have cell and thus the call looks like this:
+save2yellS("FCC_444.h5", result.diffuse, cell=snapshots[0].to_small_structure().cell, supercell=supercell)
+Read the codebase deeply, decide on the best way to deal with the cells. (now we have two: plain and gemmi.cell)
+
+--- branch: tiled-3dpdf (UNFINISHED / draft) ---
+Tiled 3D-PDF path (gemmi_disorder/pdf.py, tiled_patterson) is a draft. Before merging:
+- Auto-derive margin_A from blur/b_iso (the atom guard-band around each block)
+  instead of the fixed 3 A default, so it always exceeds the density cutoff radius.
+- Speed up the FFTs: use scipy.fft with workers= (numpy fft is single-threaded).
+- Add pdf_diffuse averaging wrapper mirroring average_diffuse:
+  <P> - P[<rho>] (average Patterson minus Patterson of the average density),
+  accumulated over configs on the same r-window.
+- Non-orthogonal cell support (draft is orthogonal-only).
