@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
+import warnings
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
@@ -307,6 +309,52 @@ def _make_block_builder(structure: gemmi.SmallStructure,
 
 
 # ---------------------------------------------------------------------------
+# DRAFT status — loud warning
+# ---------------------------------------------------------------------------
+class DraftFeatureWarning(UserWarning):
+    """Emitted when an unfinished (draft) feature is executed."""
+
+
+_DRAFT_BANNER = r"""
+################################################################################
+##                                                                            ##
+##                    ####   ####    ##    #### #########                      ##
+##                    ##  ## ##  ##  ####  ##      ##                          ##
+##                    ##  ## ####   ##  ## ####    ##                          ##
+##                    ##  ## ##  ## ###### ##      ##                          ##
+##                    ####   ##  ## ##  ## ##      ##                          ##
+##                                                                            ##
+##            tiled_patterson  —  UNFINISHED / NOT VALIDATED                   ##
+##                                                                            ##
+##  This is a DRAFT of the tiled 3D-PDF (Patterson) path. It ships so the     ##
+##  API is visible, but its results are NOT trustworthy without validation.   ##
+##                                                                            ##
+##  Known gaps (see TODO.txt / docs/tiled_3dpdf_proposal.md):                 ##
+##    * output is the RAW blurred Patterson — no deblur, no window taper      ##
+##    * margin_A is a fixed default, not derived from blur/b_iso              ##
+##    * orthogonal cells only                                                 ##
+##    * single-threaded numpy FFTs (slow on large problems)                   ##
+##    * no per-config diffuse/dPDF averaging wrapper yet                      ##
+##                                                                            ##
+##  Do not use for production or publication figures as-is.                   ##
+##                                                                            ##
+################################################################################
+"""
+
+
+def _warn_draft() -> None:
+    """Print a large banner to stderr and raise a filterable warning."""
+    print(_DRAFT_BANNER, file=sys.stderr, flush=True)
+    warnings.warn(
+        "tiled_patterson is a DRAFT/unfinished feature: results are not "
+        "validated (no deblur/window, orthogonal-only, fixed margin_A). "
+        "See TODO.txt / docs/tiled_3dpdf_proposal.md.",
+        DraftFeatureWarning,
+        stacklevel=2,
+    )
+
+
+# ---------------------------------------------------------------------------
 # main entry point
 # ---------------------------------------------------------------------------
 def tiled_patterson(structure: gemmi.SmallStructure,
@@ -324,6 +372,13 @@ def tiled_patterson(structure: gemmi.SmallStructure,
                     mem_blocks: int = 4,
                     progress: bool = False) -> PattersonWindow:
     """Tiled 3D-Patterson on |r_α| ≤ r_max, no deblur, no window.
+
+    .. warning::
+        **DRAFT / UNFINISHED.** This function is not validated for production.
+        It returns the raw blurred Patterson (no deblur, no window taper),
+        supports orthogonal cells only, and uses a fixed ``margin_A``. Calling
+        it prints a large banner to stderr and emits a ``DraftFeatureWarning``.
+        See ``TODO.txt`` / ``docs/tiled_3dpdf_proposal.md``.
 
     Parameters
     ----------
@@ -350,6 +405,8 @@ def tiled_patterson(structure: gemmi.SmallStructure,
         Block-cache controls. `disk_budget_bytes ≤ 0` disables disk (evicted
         blocks are simply rebuilt from atoms).
     """
+    _warn_draft()
+
     cell = structure.cell
     _require_orthogonal(cell)
 
