@@ -9,8 +9,11 @@ intensities over many realisations of a disordered structure to obtain:
 - ⟨I⟩ — total scattering.
 - ⟨I⟩ − |⟨F⟩|² — the diffuse scattering map.
 
-Built on gemmi's `DensityCalculatorX` fast FFT-based algorithm (the "fast path"). A slow
-but exact `sf_gemmi_direct` which calculates structure factors by direct summation is also included for validation.
+Built on gemmi's density-calculator fast FFT-based algorithm (the "fast path"),
+with X-ray, **neutron**, or electron scattering selectable per call (see
+[Choosing the radiation](#choosing-the-radiation-x-ray--neutron--electron)). A
+slow but exact `sf_gemmi_direct` which calculates structure factors by direct
+summation is also included for validation.
 
 ## Install
 
@@ -87,6 +90,27 @@ structures = [
 grid = Grid.from_supercell(supercell=(20, 20, 20), hkl_max=2)
 result = average_diffuse(structures, grid, blur=0.01)
 ```
+
+### Choosing the radiation (X-ray / neutron / electron)
+
+By default the atoms scatter as **X-rays** (IT92 form factors). To compute
+**neutron** scattering instead — atoms weighted by their bound coherent
+scattering lengths (gemmi's `Neutron92`) — pass `scattering="neutron"`. Nothing
+else about the call changes; only the per-atom weights differ, and blur/deblur
+and scaling are identical.
+
+```python
+# Neutron diffuse scattering (X-ray is the default):
+result = average_diffuse(structures, grid, blur=0.01, scattering="neutron")
+
+# The switch is also available on the low-level single-config call:
+from gemmi_disorder import sf_gemmi
+sf = sf_gemmi(structures[0], grid, blur=0.01, scattering="neutron")
+```
+
+Accepted values are `"xray"` (default), `"neutron"`, and `"electron"`; an
+unknown name raises `ValueError`. The same `scattering=` argument is accepted by
+`tiled_patterson` below.
 
 ## Large objects: the tiled 3D-PDF path
 
