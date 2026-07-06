@@ -46,6 +46,32 @@ def _is_orthogonal(cell: gemmi.UnitCell) -> bool:
     return cell.alpha == 90.0 and cell.beta == 90.0 and cell.gamma == 90.0
 
 
+# gemmi ships a density calculator per radiation type; they share the same
+# interface (put_model_density_on_grid, blur, reciprocal_space_multiplier),
+# so switching radiation is just a matter of picking the class. Neutron uses
+# bound coherent scattering lengths (Neutron92) instead of the X-ray IT92
+# form factors — same pipeline, different atomic weights.
+_DENSITY_CALCULATORS = {
+    "xray": gemmi.DensityCalculatorX,
+    "neutron": gemmi.DensityCalculatorN,
+    "electron": gemmi.DensityCalculatorE,
+}
+
+
+def _make_density_calculator(scattering: str):
+    """Return a fresh gemmi density calculator for the requested radiation.
+
+    `scattering` is one of "xray" (default), "neutron", or "electron".
+    """
+    try:
+        return _DENSITY_CALCULATORS[scattering.lower()]()
+    except (KeyError, AttributeError):
+        raise ValueError(
+            f"unknown scattering type {scattering!r}; "
+            f"choose from {sorted(_DENSITY_CALCULATORS)}"
+        )
+
+
 def sx_aniso_to_cart(u_cif: gemmi.SMat33d, cell: gemmi.UnitCell) -> gemmi.SMat33d:
     """Convert a U tensor from CIF/small-mol convention to Cartesian (mx).
 
@@ -146,8 +172,9 @@ def sf_gemmi_direct(structure: gemmi.SmallStructure, grid: Grid) -> StructureFac
 def sf_gemmi(structure: gemmi.SmallStructure,
              grid: Grid,
              blur: float = 0.01,
-             crop: float = 1.8,
-             b_iso: float = 0.0) -> NDArray[np.complex128]:
+             crop: float = 2.0,
+             b_iso: float = 0.0,
+             scattering: str = "xray") -> NDArray[np.complex128]:
     """Calculate structure factors via density-on-grid + FFT (fast path).
 
     Algorithm:
@@ -173,9 +200,15 @@ def sf_gemmi(structure: gemmi.SmallStructure,
         larger inverse correction. 0.01 matches Dy467 production.
     crop: float
         Oversampling factor (≥1) used to pad the density grid before FFT.
+        Default 2.0 (density grid doubled before the FFT) — comfortably
+        suppresses aliasing at a modest memory cost.
     b_iso: float
         Base isotropic B-factor assigned to every atom in `sx_to_mx_structure`.
         Default 0.0 matches Dy467; set to 0.5 to reproduce Seminar 7 results.
+    scattering: str
+        Radiation type: "xray" (default, IT92 form factors), "neutron"
+        (Neutron92 bound coherent scattering lengths), or "electron". Only the
+        atomic weights change; blur/deblur and scaling are identical.
 
     Returns
     -------
@@ -184,7 +217,7 @@ def sf_gemmi(structure: gemmi.SmallStructure,
     padded_grid = grid.pad(crop)
 
     str_mx = sx_to_mx_structure(structure, b_iso=b_iso)
-    dencalc = gemmi.DensityCalculatorX()
+    dencalc = _make_density_calculator(scattering)
     # `structure.spacegroup` is populated when reading a CIF but may be None
     # when the structure was built in memory; fall back to looking it up
     # from the HM symbol (defaulting to P1, which is what this package assumes).
@@ -242,5 +275,63 @@ def calculate_stol_squared(q_vectors: NDArray[np.float64],
     is the reciprocal metric tensor G* (3×3) such that hᵀ G* h = 1/d².
     """
     return np.einsum('ijkl,lm,ijkm->ijk', q_vectors, inv_metric, q_vectors) / 4
+
+
+def pdf_step_sizes(grid: Grid, cell: gemmi.UnitCell) -> NDArray[np.float64]:
+    """Real-space (PDF / Patterson) voxel size Δr per axis, in Å.
+
+    The Patterson map is the FFT of the intensity grid, so its real-space step
+    is the inverse of the grid's *full* reciprocal extent along each axis:
+
+        Δr_i = 1 / (n_i · Δh_i · |a*_i|)
+
+    where n_i·Δh_i is the reciprocal span in r.l.u. and |a*_i| converts r.l.u.
+    to Å⁻¹. `cell` is the motif unit cell the Miller indices refer to (the same
+    cell `save_to_yell` takes, NOT the supercell).
+    """
+    recip = cell.reciprocal()
+    recip_len = np.array([recip.a, recip.b, recip.c], dtype=float)
+    span_inv_A = np.array(grid.no_pixels, dtype=float) \
+        * np.array(grid.step_sizes, dtype=float) * recip_len
+    return 1.0 / span_inv_A
+
+
+def suggested_blur(grid: Grid, cell: gemmi.UnitCell) -> NDArray[np.float64]:
+    """Per-axis blur B-factor (Å²) whose Gaussian has σ = ½·(PDF-space step).
+
+    The blur convolves the density with a Gaussian of rms width σ, related to
+    the B-factor by B = 8π²σ². Setting σ to half the PDF-space voxel keeps the
+    smoothing just below the resolution the map can represent, so it damps
+    sub-voxel FFT ripple without erasing real features.
+    """
+    sigma = pdf_step_sizes(grid, cell) / 2.0
+    return 8.0 * np.pi ** 2 * sigma ** 2
+
+
+def blur_report(grid: Grid, cell: gemmi.UnitCell) -> str:
+    """Human-readable suggestion for the `blur` to pass to `sf_gemmi`.
+
+    Returns a multi-line string reporting the PDF-space step per axis and the
+    blur (B-factor, Å²) whose Gaussian width is half that step. `cell` is the
+    motif unit cell (as taken by `save_to_yell`).
+    """
+    dr = pdf_step_sizes(grid, cell)
+    sigma = dr / 2.0
+    blur = suggested_blur(grid, cell)
+    reco = float(np.mean(blur))
+    axes = "abc"
+    lines = [
+        "blur suggestion (σ = ½ · PDF-space step):",
+        f"  {'axis':<4} {'PDF step Δr [Å]':>16} {'σ = Δr/2 [Å]':>14} {'blur = 8π²σ² [Å²]':>18}",
+    ]
+    for i in range(3):
+        lines.append(f"  {axes[i]:<4} {dr[i]:>16.4f} {sigma[i]:>14.4f} {blur[i]:>18.4f}")
+    lines.append(f"  → suggested blur (mean over axes): {reco:.4f} Å²")
+    if np.ptp(blur) > 1e-6:
+        lines.append(
+            f"    (per-axis blur spans {blur.min():.4f}–{blur.max():.4f} Å²; "
+            "the grid is anisotropic — blur is a single isotropic value)"
+        )
+    return "\n".join(lines)
 
 

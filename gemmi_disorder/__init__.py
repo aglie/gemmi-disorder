@@ -25,6 +25,9 @@ from .scattering import (
     get_form_factors,
     generate_q_vectors,
     calculate_stol_squared,
+    pdf_step_sizes,
+    suggested_blur,
+    blur_report,
 )
 from .averaging import average_diffuse, DiffuseResult
 from .io import save2yellS, save_to_yell
@@ -42,6 +45,9 @@ __all__ = [
     "get_form_factors",
     "generate_q_vectors",
     "calculate_stol_squared",
+    "pdf_step_sizes",
+    "suggested_blur",
+    "blur_report",
     "average_diffuse",
     "DiffuseResult",
     "save2yellS",

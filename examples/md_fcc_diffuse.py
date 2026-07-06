@@ -27,10 +27,13 @@ from ase.calculators.emt import EMT
 from ase.md.langevin import Langevin
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 
+import gemmi
+
 from gemmi_disorder import (
     DisorderedStructure,
     Grid,
     average_diffuse,
+    blur_report,
     save2yellS
 )
 
@@ -101,6 +104,11 @@ def main():
     print(f"grid: pixels {grid.no_pixels.tolist()}, "
           f"step {grid.step_sizes.tolist()}, "
           f"lower {grid.lower_limits.tolist()}")
+
+    # Report a resolution-matched blur (σ = ½ the PDF-space voxel). `blur_report`
+    # takes the motif cell — the same cell the Miller indices refer to.
+    motif_cell = gemmi.UnitCell(a0, a0, a0, 90.0, 90.0, 90.0)
+    print(blur_report(grid, motif_cell))
 
     t0 = time.time()
     result = average_diffuse(

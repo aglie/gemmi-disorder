@@ -51,8 +51,9 @@ def _to_small_structure(structure: Union[gemmi.SmallStructure, DisorderedStructu
 def average_diffuse(structures: List[Union[gemmi.SmallStructure, DisorderedStructure]],
                     grid: Grid,
                     blur: float = 0.01,
-                    crop: float = 1.8,
+                    crop: float = 2.0,
                     b_iso: float = 0.0,
+                    scattering: str = "xray",
                     keep_per_snapshot: bool = False,
                     progress: bool = False) -> DiffuseResult:
     """Compute ⟨F⟩, ⟨I⟩, and ⟨I⟩−|⟨F⟩|² over a list of configurations.
@@ -64,8 +65,9 @@ def average_diffuse(structures: List[Union[gemmi.SmallStructure, DisorderedStruc
         unit cell (the grid is fixed across the average).
     grid: Grid
         Reciprocal-space grid used for every snapshot.
-    blur, crop, b_iso:
-        Forwarded to `sf_gemmi` — see its docstring.
+    blur, crop, b_iso, scattering:
+        Forwarded to `sf_gemmi` — see its docstring. `scattering` selects the
+        radiation ("xray", "neutron", or "electron").
     keep_per_snapshot: bool
         If True, the returned result also carries every per-config SF cube
         in `result.per_snapshot_F`. Off by default for memory reasons.
@@ -89,7 +91,8 @@ def average_diffuse(structures: List[Union[gemmi.SmallStructure, DisorderedStruc
             print(f"calculating config {i + 1}/{n}")
 
         struct = _to_small_structure(raw)
-        sf = sf_gemmi(struct, grid, blur=blur, crop=crop, b_iso=b_iso)
+        sf = sf_gemmi(struct, grid, blur=blur, crop=crop, b_iso=b_iso,
+                      scattering=scattering)
 
         if accum_F is None:
             accum_F = np.zeros_like(sf)

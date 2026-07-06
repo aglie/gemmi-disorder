@@ -20,8 +20,11 @@ from gemmi_disorder import (
     DisorderedStructure,
     Grid,
     average_diffuse,
+    blur_report,
+    pdf_step_sizes,
     sf_gemmi,
     sf_gemmi_direct,
+    suggested_blur,
     sx_aniso_to_cart,
 )
 
@@ -317,3 +320,39 @@ def test_keep_per_snapshot():
     assert result.per_snapshot_F is not None
     assert len(result.per_snapshot_F) == 2
     np.testing.assert_allclose(result.per_snapshot_F[0], result.per_snapshot_F[1])
+
+
+def test_neutron_switch_differs_from_xray():
+    """Selecting neutron scattering must change the structure factors and
+    reject unknown radiation names."""
+    s = two_carbon_structure().to_small_structure()
+    grid = Grid(lower_limits=[-2, -2, -2], step_sizes=[1, 1, 1], no_pixels=[4, 4, 4])
+
+    f_xray = sf_gemmi(s, grid, blur=0.5, scattering="xray")
+    f_neutron = sf_gemmi(s, grid, blur=0.5, scattering="neutron")
+
+    # Default is X-ray, so the explicit "xray" call must match the default.
+    np.testing.assert_allclose(f_xray, sf_gemmi(s, grid, blur=0.5))
+    # Neutron weights differ from X-ray form factors → different amplitudes.
+    assert not np.allclose(np.abs(f_xray), np.abs(f_neutron))
+
+    with pytest.raises(ValueError):
+        sf_gemmi(s, grid, scattering="gamma")
+
+
+def test_suggested_blur_matches_half_pdf_step():
+    """suggested_blur must correspond to a Gaussian σ = half the PDF-space step
+    (B = 8π²σ²), and blur_report must report the same step and value."""
+    grid = Grid.from_supercell(supercell=(6, 6, 6), hkl_max=3)
+    cell = gemmi.UnitCell(3.61, 3.61, 3.61, 90, 90, 90)
+
+    dr = pdf_step_sizes(grid, cell)
+    # PDF step = a / (2·hkl_max) for the supercell grid convention.
+    np.testing.assert_allclose(dr, 3.61 / (2 * 3))
+
+    sigma = dr / 2.0
+    np.testing.assert_allclose(suggested_blur(grid, cell), 8 * np.pi ** 2 * sigma ** 2)
+
+    report = blur_report(grid, cell)
+    assert "blur suggestion" in report
+    assert f"{float(np.mean(suggested_blur(grid, cell))):.4f}" in report

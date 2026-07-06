@@ -55,7 +55,7 @@ import gemmi
 import numpy as np
 from numpy.typing import NDArray
 
-from .scattering import sx_to_mx_structure
+from .scattering import _make_density_calculator, sx_to_mx_structure
 
 # The 27 block offsets (including self) that a block can correlate with when
 # block_vox ≥ M. Order is irrelevant; each *ordered* pair is visited once so the
@@ -243,7 +243,8 @@ def _make_block_builder(structure: gemmi.SmallStructure,
                         dr: float,
                         margin_vox: int,
                         blur: float,
-                        b_iso: float) -> Callable[[Tuple[int, int, int]], NDArray[np.float32]]:
+                        b_iso: float,
+                        scattering: str = "xray") -> Callable[[Tuple[int, int, int]], NDArray[np.float32]]:
     """Return a function I -> ρ_I (B³ float32), the true density masked to block I.
 
     ρ_I is *not* "the density of block I's atoms" but "the total density,
@@ -289,7 +290,7 @@ def _make_block_builder(structure: gemmi.SmallStructure,
             site.occ = 1.0
             mini.add_site(site)
 
-        dc = gemmi.DensityCalculatorX()
+        dc = _make_density_calculator(scattering)
         dc.grid.spacegroup = sg_p1
         dc.grid.unit_cell = mini.cell
         dc.grid.set_size(G, G, G)
@@ -316,6 +317,7 @@ def tiled_patterson(structure: gemmi.SmallStructure,
                     margin_A: float = 3.0,
                     blur: float = 0.5,
                     b_iso: float = 0.0,
+                    scattering: str = "xray",
                     apply_dv: bool = True,
                     cache_dir: Optional[str] = None,
                     disk_budget_bytes: int = 8 * 1024 ** 3,
@@ -339,8 +341,9 @@ def tiled_patterson(structure: gemmi.SmallStructure,
         Guard band (Å) around each block when placing atoms, so Gaussian tails
         from neighbouring atoms are captured. Must exceed the density cutoff
         radius (a few Å for small blur).
-    blur, b_iso :
+    blur, b_iso, scattering :
         Passed through to the density build, exactly as in `sf_gemmi`.
+        `scattering` selects the radiation ("xray", "neutron", or "electron").
     apply_dv : bool
         Multiply by dV² (dV = voxel volume) to match `sf_gemmi`'s scale.
     cache_dir, disk_budget_bytes, mem_blocks :
@@ -367,7 +370,7 @@ def tiled_patterson(structure: gemmi.SmallStructure,
     W = 2 * M + 1
     pw = np.zeros((W, W, W), dtype=np.float64)
 
-    builder = _make_block_builder(structure, B, dr, margin_vox, blur, b_iso)
+    builder = _make_block_builder(structure, B, dr, margin_vox, blur, b_iso, scattering)
     owns_cache = cache_dir is None
     cdir = Path(cache_dir) if cache_dir is not None else Path(
         f".tiled_patterson_cache_{os.getpid()}")
